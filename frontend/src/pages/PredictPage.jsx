@@ -607,14 +607,14 @@ export default function PredictPage() {
       setStep(7);
 
       // If backend returned remaining field, use it (preferred)
-      if (resp && typeof resp.remaining === "number") {
-        setRemainingTrials(resp.remaining);
+      if (resp && typeof resp.remaining_predictions === "number") {
+        setRemainingTrials(resp.remaining_predictions);
         const subscription = JSON.parse(localStorage.getItem("subscription"));
         if (subscription) {
-        subscription.remaining_predictions = resp.remaining;
+        subscription.remaining_predictions = resp.remaining_predictions;
         localStorage.setItem("subscription", JSON.stringify(subscription));
       }
-        if (resp.remaining <= 0) setShowUpgradeModal(true);
+        if (resp.remaining_predictions <= 0) setShowUpgradeModal(true);
       } else {
         // otherwise, decrement locally and refresh from subscription/profile
         if (!isAdmin && remainingTrials !== null && remainingTrials !== Infinity) {
@@ -825,11 +825,25 @@ export default function PredictPage() {
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <span style={{ width: "100px", fontWeight: "bold", fontSize: "10pt" }}>Monthly EUI:</span>
                   <div style={{ flexGrow: 1, backgroundColor: "#e9f8e9", height: "18px", borderRadius: "4px", overflow: "hidden", minWidth: "100px" }}>
-                    <div style={{ height: "100%", width: `${Math.min((result.eui_month_kwh_m2 / 40) * 100, 100)}%`, backgroundColor: "#15803d" }} />
+                    <div style={{ height: "100%", width: `${Math.min((result.eui_month_kwh_m2 / 50) * 100, 100)}%`, backgroundColor: "#15803d" }} />
                   </div>
                   <span style={{ width: "80px", textAlign: "right", fontWeight: "bold", fontSize: "10pt" }}>{result.eui_month_kwh_m2} kWh/m²</span>
                 </div>
               </div>
+
+              {/* NEW: Optimal Performance Metric (EUI after recommendations) */}
+              {result.optimal_performance !== undefined && result.optimal_performance !== null && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ width: "100px", fontWeight: "bold", fontSize: "10pt", color: "#10b981" }}>Optimal EUI:</span>
+                    <div style={{ flexGrow: 1, backgroundColor: "#dcfce7", height: "18px", borderRadius: "4px", overflow: "hidden", minWidth: "100px" }}>
+                      <div style={{ height: "100%", width: `${Math.min((result.optimal_performance / 50) * 100, 100)}%`, backgroundColor: "#10b981" }} />
+                    </div>
+                    <span style={{ width: "80px", textAlign: "right", fontWeight: "bold", fontSize: "10pt", color: "#10b981" }}>{fmt2(result.optimal_performance)} kWh/m²</span>
+                  </div>
+                </div>
+              )}
+              {/* END NEW BLOCK */}
             </div>
 
             <div className="mt-4">
@@ -1214,6 +1228,19 @@ export default function PredictPage() {
                       </div>
                     );
                   })}
+
+                  {/* NEW: Optimal Performance Metric (EUI after recommendations) */}
+                  {result.optimal_performance !== undefined && result.optimal_performance !== null && (
+                      <div key={`metric-optimal`} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                        <span className="w-32 text-green-700 font-semibold">Optimal EUI:</span>
+                        <div className="h-4 rounded flex-1 overflow-hidden" style={{ backgroundColor: "#dcfce7" }}>
+                          <div className="h-4 rounded transition-all duration-500" style={{ width: `${Math.min((result.optimal_performance / 50) * 100, 100)}%`, backgroundColor: "#10b981" }} />
+                        </div>
+                        <span className="text-green-700 font-semibold">{fmt2(result.optimal_performance)} kWh/m²</span>
+                      </div>
+                  )}
+                  {/* END NEW BLOCK */}
+
                 </div>
 
                 <div className="mt-4">
