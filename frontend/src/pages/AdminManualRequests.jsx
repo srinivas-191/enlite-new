@@ -27,7 +27,7 @@ export default function AdminManualRequests() {
   const [pendingCount, setPendingCount] = useState(0); // Count of pending requests
 
   // FIXED: always correct backend root
-  const API_ROOT = "https://enlite-new-production-a639.up.railway.app/api";
+  const API_ROOT = "https://enlite-new-production-6fc6.up.railway.app/api";
 
   useEffect(() => {
     loadRequests();

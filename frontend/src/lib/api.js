@@ -3,7 +3,7 @@ import axios from "axios";
 
 export const API_BASE =
   import.meta.env.VITE_API_BASE ||
-  "https://enlite-new-production-a639.up.railway.app/api";
+  "https://enlite-new-production-6fc6.up.railway.app/api";
 
 // Default axios instance (JSON)
 export const api = axios.create({
