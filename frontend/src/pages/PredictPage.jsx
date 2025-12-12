@@ -1273,6 +1273,33 @@ export default function PredictPage() {
                       <div className="text-green-700">No improvements recommended. Excellent performance.</div>
                     )}
                   </div>
+                  <div className="mt-6">
+                    <h3 className="text-lg font-semibold mb-3 text-gray-800 flex items-center gap-2">
+                      Expected Performance After Fixing Issues
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-4 bg-blue-50 rounded-lg">
+                        <p className="text-sm uppercase text-gray-500 font-medium">Optimized Energy (kWh/month)</p>
+                        <p className="text-2xl font-bold text-blue-700">{result.expected_performance?.optimized_energy_month_kwh}</p>
+                      </div>
+                      <div className="p-4 bg-green-50 rounded-lg">
+                        <p className="text-sm uppercase text-gray-500 font-medium">Optimized EUI (kWh/m²/month)</p>
+                        <p className="text-2xl font-bold text-green-700">{result.expected_performance?.optimized_eui_month_kwh_m2}</p>
+                      </div>
+                      <div className="p-4 bg-yellow-50 rounded-lg">
+                        <p className="text-sm uppercase text-gray-500 font-medium">Energy Savings (kWh)</p>
+                        <p className="text-2xl font-bold text-yellow-700">{result.expected_performance?.energy_savings_kwh}</p>
+                      </div>
+                      <div className="p-4 bg-purple-50 rounded-lg">
+                        <p className="text-sm uppercase text-gray-500 font-medium">Energy Savings (%)</p>
+                        <p className="text-2xl font-bold text-purple-700">{result.expected_performance?.energy_savings_percent}%</p>
+                      </div>
+                      <div className="p-4 bg-red-50 rounded-lg md:col-span-2">
+                        <p className="text-sm uppercase text-gray-500 font-medium">Improved Performance Category</p>
+                        <p className="text-2xl font-bold text-red-700">{result.expected_performance?.improved_performance_category}</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="mt-6 flex flex-wrap gap-3">

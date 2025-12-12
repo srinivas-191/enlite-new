@@ -137,7 +137,6 @@ def get_optimal_performance(user_vals, total_energy_month, area, model, sc):
     # 1. Create optimal input by overwriting user's values with optimal targets
     optimal_input = user_vals.copy()
     for key, val in optimal.items():
-        # Only overwrite if the key exists in user_vals (i.e., it was a feature)
         if key in optimal_input:
             optimal_input[key] = val
 
@@ -154,13 +153,17 @@ def get_optimal_performance(user_vals, total_energy_month, area, model, sc):
     saved_kwh = total_energy_month - optimal_month
     saved_percent = (saved_kwh / total_energy_month) * 100 if total_energy_month > 0 else 0
 
+    # Get improved performance category
+    improved_category = monthly_category(optimal_eui)
+
     return {
-        "optimal_energy_month_kwh": round(optimal_month, 2),
-        "optimal_eui_month_kwh_m2": round(optimal_eui, 2) if optimal_eui else None,
-        "saved_kwh": round(saved_kwh, 2),
-        "saved_percent": round(saved_percent, 2),
-        "expected_category": monthly_category(optimal_eui)
+        "optimized_energy_month_kwh": round(optimal_month, 2),
+        "optimized_eui_month_kwh_m2": round(optimal_eui, 2) if optimal_eui else None,
+        "energy_savings_kwh": round(saved_kwh, 2),
+        "energy_savings_percent": round(saved_percent, 2),
+        "improved_performance_category": improved_category
     }
+
 
 def get_recommendations(user_vals):
     recommendations = []
@@ -346,107 +349,141 @@ def get_defaults(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def predict_energy(request):
-  user = request.user
+    user = request.user
 
-  # ensure subscription exists
-  sub, _ = Subscription.objects.get_or_create(
-    user=user,
-    defaults={
-      "plan": "free",
-      "allowed_predictions": 10,
-      "remaining_predictions": 10,
-      "active": False,
-    }
-  )
-
-  # check remaining predictions
-  if sub.remaining_predictions is None:
-    # Defensive: if None, treat as unlimited only for admins
-    if not user.is_staff:
-      return Response({"error": "LIMIT_UNSPECIFIED"}, status=403)
-  elif sub.remaining_predictions <= 0:
-    if not sub.active:
-      return Response({"error": "TRIAL_EXPIRED", "message": "Your free trial has ended. Please upgrade."}, status=403)
-    return Response({"error": "LIMIT_REACHED", "message": "Your plan limit is over."}, status=403)
-
-  # load model
-  try:
-    model, le, sc, features = load_all()
-  except Exception as e:
-    return Response({"error": "Model loading failed", "details": str(e)}, status=500)
-
-  try:
-    data = request.data
-    row = []
-
-    for feat in features:
-      if feat == "Building_Type":
-        val = data.get("Building_Type")
-        if not val:
-          return Response({"error": "Missing Building_Type"}, status=400)
-        try:
-          # label encoder may expect lowercase; handle gracefully
-          encoded = int(le.transform([val.lower()])[0])
-        except Exception:
-          # try without lower
-          try:
-            encoded = int(le.transform([val])[0])
-          except Exception:
-            return Response({"error": f"Invalid Building_Type: {val}"}, status=400)
-        row.append(encoded)
-      else:
-        if feat not in data:
-          return Response({"error": f"Missing feature: {feat}"}, status=400)
-        row.append(float(data[feat]))
-
-    df = pd.DataFrame([row], columns=features)
-    scaled = sc.transform(df)
-
-    yearly = float(model.predict(scaled)[0])
-    monthly = yearly / 12.0
-    area = float(data.get("Total_Building_Area") or 0)
-    eui = monthly / area if area else None
-
-    user_vals = df.iloc[0].to_dict()
-    issues, recs = get_recommendations(user_vals)
-    impacting = issues if issues else ["No major issues detected."]
-
-        # Calculate optimal performance after recommendations
-    optimal_performance = get_optimal_performance(user_vals, monthly, area, model, sc)
-
-    record = PredictionHistory.objects.create(
-      user=user,
-      building_type=data.get("Building_Type"),
-      total_energy_month_kwh=round(monthly, 2),
-      eui_month_kwh_m2=round(eui, 2) if eui else None,
-      performance_category=monthly_category(eui),
-      inputs=data,
+    # ensure subscription exists
+    sub, _ = Subscription.objects.get_or_create(
+        user=user,
+        defaults={
+            "plan": "free",
+            "allowed_predictions": 10,
+            "remaining_predictions": 10,
+            "active": False,
+        }
     )
 
-    # consume one prediction (skip for admins)
-    if not user.is_staff:
-      # use model method if available
-      try:
-        sub.consume_prediction(1)
-      except Exception:
-        # fallback decrement & save
-        if sub.remaining_predictions is not None:
-          sub.remaining_predictions = max(0, sub.remaining_predictions - 1)
-          sub.save()
+    # check remaining predictions
+    if sub.remaining_predictions is None:
+        # Defensive: if None, treat as unlimited only for admins
+        if not user.is_staff:
+            return Response({"error": "LIMIT_UNSPECIFIED"}, status=403)
+    elif sub.remaining_predictions <= 0:
+        if not sub.active:
+            return Response({"error": "TRIAL_EXPIRED", "message": "Your free trial has ended. Please upgrade."}, status=403)
+        return Response({"error": "LIMIT_REACHED", "message": "Your plan limit is over."}, status=403)
 
-    return Response({
-      "record_id": record.id,
-      "total_energy_month_kwh": record.total_energy_month_kwh,
-      "eui_month_kwh_m2": record.eui_month_kwh_m2,
-      "performance_category": record.performance_category,
-      "impacting_factors": impacting,
-      "recommendations": recs,
-      "remaining_predictions": sub.remaining_predictions,
-            "optimal_performance": optimal_performance # Include the new data
-    })
+    # load model
+    try:
+        model, le, sc, features = load_all()
+    except Exception as e:
+        return Response({"error": "Model loading failed", "details": str(e)}, status=500)
 
-  except Exception as e:
-    return Response({"error": str(e), "trace": traceback.format_exc()}, status=500)
+    try:
+        data = request.data
+        row = []
+
+        for feat in features:
+            if feat == "Building_Type":
+                val = data.get("Building_Type")
+                if not val:
+                    return Response({"error": "Missing Building_Type"}, status=400)
+                try:
+                    # label encoder may expect lowercase; handle gracefully
+                    encoded = int(le.transform([val.lower()])[0])
+                except Exception:
+                    # try without lower
+                    try:
+                        encoded = int(le.transform([val])[0])
+                    except Exception:
+                        return Response({"error": f"Invalid Building_Type: {val}"}, status=400)
+                row.append(encoded)
+            else:
+                if feat not in data:
+                    return Response({"error": f"Missing feature: {feat}"}, status=400)
+                row.append(float(data[feat]))
+
+        df = pd.DataFrame([row], columns=features)
+        scaled = sc.transform(df)
+
+        yearly = float(model.predict(scaled)[0])
+        monthly = yearly / 12.0
+        area = float(data.get("Total_Building_Area") or 0)
+        eui = monthly / area if area else None
+
+        user_vals = df.iloc[0].to_dict()
+        issues, recs = get_recommendations(user_vals)
+        impacting = issues if issues else ["No major issues detected."]
+
+        # Calculate expected performance after fixing issues
+        optimal_input = user_vals.copy()
+        optimal = {
+            "Floor_Insulation": 0.20,
+            "Door_Insulation": 1.00,
+            "Roof_Insulation": 0.15,
+            "Window_Insulation": 1.20,
+            "Wall_Insulation": 0.25,
+            "Hvac_Efficiency": 3.5,
+            "Domestic_Hot_Water_Usage": 1.50,
+            "Lighting_Density": 3,
+            "Occupancy_Level": 3,
+            "Equipment_Density": 8,
+            "Window_To_Wall_Ratio": 30
+        }
+        for key, val in optimal.items():
+            optimal_input[key] = val
+
+        optimal_df = pd.DataFrame([optimal_input])
+        optimal_scaled = sc.transform(optimal_df)
+        optimal_year = float(model.predict(optimal_scaled)[0])
+        optimal_month = optimal_year / 12.0
+        optimal_eui = optimal_month / area if area else None
+
+        # Calculate savings
+        saved_kwh = monthly - optimal_month
+        saved_percent = (saved_kwh / monthly) * 100 if monthly > 0 else 0
+
+        # Get improved performance category
+        improved_category = monthly_category(optimal_eui)
+
+        expected_performance = {
+            "optimized_energy_month_kwh": round(optimal_month, 2),
+            "optimized_eui_month_kwh_m2": round(optimal_eui, 2) if optimal_eui else None,
+            "energy_savings_kwh": round(saved_kwh, 2),
+            "energy_savings_percent": round(saved_percent, 2),
+            "improved_performance_category": improved_category
+        }
+
+        record = PredictionHistory.objects.create(
+            user=user,
+            building_type=data.get("Building_Type"),
+            total_energy_month_kwh=round(monthly, 2),
+            eui_month_kwh_m2=round(eui, 2) if eui else None,
+            performance_category=monthly_category(eui),
+            inputs=data,
+        )
+
+        # consume one prediction (skip for admins)
+        if not user.is_staff:
+            try:
+                sub.consume_prediction(1)
+            except Exception:
+                if sub.remaining_predictions is not None:
+                    sub.remaining_predictions = max(0, sub.remaining_predictions - 1)
+                    sub.save()
+
+        return Response({
+            "record_id": record.id,
+            "total_energy_month_kwh": record.total_energy_month_kwh,
+            "eui_month_kwh_m2": record.eui_month_kwh_m2,
+            "performance_category": record.performance_category,
+            "impacting_factors": impacting,
+            "recommendations": recs,
+            "remaining_predictions": sub.remaining_predictions,
+            "expected_performance": expected_performance
+        })
+
+    except Exception as e:
+        return Response({"error": str(e), "trace": traceback.format_exc()}, status=500)
 
 # -------------------------
 # HISTORY endpoints
