@@ -1,5 +1,4 @@
 // src/pages/AdminManualRequests.jsx
-
 import React, { useEffect, useState } from "react";
 // Import apiDelete for the new function
 import { apiGet, apiPost, apiDelete } from "../lib/api"; 
@@ -25,6 +24,7 @@ const staggerContainer = {
 
 export default function AdminManualRequests() {
   const [requests, setRequests] = useState([]);
+  const [pendingCount, setPendingCount] = useState(0); // Count of pending requests
 
   // FIXED: always correct backend root
   const API_ROOT = "https://beneficial-quietude-production.up.railway.app/api";
@@ -36,7 +36,11 @@ export default function AdminManualRequests() {
   async function loadRequests() {
     try {
       const res = await apiGet("/admin/manual-requests/");
-      setRequests(res.requests || []);
+      const reqs = res.requests || [];
+      setRequests(reqs);
+      // Count pending requests
+      const pending = reqs.filter(req => req.status === "pending").length;
+      setPendingCount(pending);
     } catch (err) {
       console.error(err);
       alert("Failed to load payment requests (are you admin?)");
@@ -52,7 +56,6 @@ export default function AdminManualRequests() {
 
     try {
       // API call to approve the request. 
-      // We assume the server returns the updated subscription object in the response body (res)
       const res = await apiPost(`/admin/manual-requests/${id}/approve/`, {});
       
       // Store the status message using the approved user's unique identifier (username)
@@ -61,7 +64,7 @@ export default function AdminManualRequests() {
         status: "approved",
         subscription: res.subscription || null,
         timestamp: Date.now(),
-        expiry: res.subscription?.expiry || null // Store expiry if available
+        expiry: res.subscription?.expiry || null
       };
       
       // Store in a user-specific key for the target user
@@ -128,17 +131,21 @@ export default function AdminManualRequests() {
       return { icon: <CheckCircle className="text-green-500" size={20} />, color: "text-green-600", border: "border-green-300", bg: "bg-green-50" };
     } else if (status === "pending") {
       return { icon: <Clock className="text-yellow-500" size={20} />, color: "text-yellow-600", border: "border-yellow-300", bg: "bg-yellow-50" };
-    } else if (status === "rejected") { // Added rejected status styling
+    } else if (status === "rejected") {
       return { icon: <XCircle className="text-red-500" size={20} />, color: "text-red-600", border: "border-red-300", bg: "bg-red-50" };
     }
     return { icon: <Clock className="text-gray-500" size={20} />, color: "text-gray-600", border: "border-gray-300", bg: "bg-gray-50" };
   };
 
   return (
-    // Updated: Removed max-w-6xl and used p-12 for full-width with equal margins
     <div className="max-w-full mx-auto mt-24 p-12 bg-[#FCF5EE] min-h-[85vh]">
-      <h1 className="text-4xl font-extrabold mb-8 text-gray-800 border-b pb-3">
+      <h1 className="text-4xl font-extrabold mb-8 text-gray-800 border-b pb-3 flex items-center gap-2">
         Manual Payment Requests
+        {pendingCount > 0 && (
+          <span className="bg-red-500 text-white text-sm font-bold px-2 py-1 rounded-full">
+            {pendingCount}
+          </span>
+        )}
       </h1>
 
       {requests.length === 0 && (
@@ -161,7 +168,6 @@ export default function AdminManualRequests() {
             <motion.div 
               key={req.id} 
               variants={cardVariants}
-              // Updated card border to use dynamic status color
               className={`border p-6 rounded-xl shadow-xl transition duration-500 bg-white hover:shadow-2xl flex flex-col justify-between ${statusInfo.border}`}
               whileHover={{ scale: 1.02, zIndex: 1 }}
               whileTap={{ scale: 0.99 }}
@@ -253,7 +259,6 @@ export default function AdminManualRequests() {
                   <Trash2 size={20} /> Delete Request History
                 </motion.button>
               </div>
-
             </motion.div>
           );
         })}
