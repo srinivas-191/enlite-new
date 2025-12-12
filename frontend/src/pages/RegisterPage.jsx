@@ -33,9 +33,8 @@ export default function RegisterPage() {
       // Store user info
       localStorage.setItem("username", res.username);
       localStorage.setItem("isAdmin", res.is_admin ? "true" : "false");
-      localStorage.setItem("token", res.token); // ⭐ FIX: Store token to be tracked by Navbar
 
-      // ⭐ FIX: Dispatch authChange event now to trigger Navbar update immediately
+      // Notify navbar to update
       window.dispatchEvent(new Event("authChange"));
 
       // Handle previous redirect request (if Try button triggered register)
@@ -45,8 +44,7 @@ export default function RegisterPage() {
         localStorage.removeItem("postLoginRedirect");
         navigate(redirect);
       } else {
-        // Successful registration automatically logs user in and redirects to profile.
-        navigate("/profile"); 
+        navigate("/profile");
       }
     } catch (err) {
       console.error(err);

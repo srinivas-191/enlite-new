@@ -26,7 +26,7 @@ export default function LoginPage() {
       setAuthToken(res.token);
       localStorage.setItem("username", res.username);
       localStorage.setItem("isAdmin", res.is_admin ? "true" : "false");
-      localStorage.setItem("token", res.token); // ⭐ Ensuring token is set
+      localStorage.setItem("token", res.token);
 
       // Wait briefly for axios to attach token
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -39,8 +39,7 @@ export default function LoginPage() {
         console.error("Failed loading subscription", e);
       }
 
-      // ⭐ Ensure dispatching the event happens *after* all storage updates
-      window.dispatchEvent(new Event("authChange")); 
+      window.dispatchEvent(new Event("authChange"));
 
       // ADMIN redirect
       if (res.is_admin) {
