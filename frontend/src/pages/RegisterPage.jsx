@@ -26,26 +26,26 @@ export default function RegisterPage() {
         setBusy(false);
         return;
       }
-
-      // Set token for axios + save to localStorage
-      setAuthToken(res.token);
-
-      // Store user info
-      localStorage.setItem("username", res.username);
-      localStorage.setItem("isAdmin", res.is_admin ? "true" : "false");
-
-      // Notify navbar to update
-      window.dispatchEvent(new Event("authChange"));
+      
+      // --- START MODIFICATION ---
+      // REMOVED: setAuthToken(res.token);
+      // REMOVED: localStorage.setItem("username", res.username);
+      // REMOVED: localStorage.setItem("isAdmin", res.is_admin ? "true" : "false");
+      // REMOVED: window.dispatchEvent(new Event("authChange"));
+      // --- END MODIFICATION ---
 
       // Handle previous redirect request (if Try button triggered register)
       const redirect = localStorage.getItem("postLoginRedirect");
 
       if (redirect) {
-        localStorage.removeItem("postLoginRedirect");
-        navigate(redirect);
-      } else {
-        navigate("/login");
+        // Clear the redirect, but still send them to the regular login page
+        // as they are not logged in and shouldn't immediately go to the protected page.
+        localStorage.removeItem("postLoginRedirect"); 
       }
+      
+      // Navigate to login page
+      navigate("/login");
+
     } catch (err) {
       console.error(err);
       alert(err?.response?.data?.error || "Registration failed");
