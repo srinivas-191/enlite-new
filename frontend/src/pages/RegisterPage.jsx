@@ -44,7 +44,7 @@ export default function RegisterPage() {
         localStorage.removeItem("postLoginRedirect");
         navigate(redirect);
       } else {
-        navigate("/profile");
+        navigate("/login");
       }
     } catch (err) {
       console.error(err);
