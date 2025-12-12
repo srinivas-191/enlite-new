@@ -11,26 +11,54 @@ export default function Navbar() {
   const [isAdmin, setIsAdmin] = useState(
     localStorage.getItem("isAdmin") === "true"
   );
-  const [username, setUsername] = useState(
-    localStorage.getItem("username") || ""
-  );
-  const navigate = useNavigate();
+  const initialUsername = localStorage.getItem("username") || "";
+  const [username, setUsername] = useState(initialUsername);
+
+  // ⭐ FIX: Initial state of notification must check the user-specific key
+  const getInitialNotificationState = (user) => {
+    const statusKey = `manualRequestStatus_${user}`;
+    const status = localStorage.getItem(statusKey);
+    if (!status) return false;
+    
+    const parsedStatus = JSON.parse(status);
+    return !localStorage.getItem(`dismissed_${parsedStatus.id}`);
+  };
+
   const [hasNewNotification, setHasNewNotification] = useState(
-    !!localStorage.getItem("manualRequestStatus") && 
-    !localStorage.getItem(`dismissed_${JSON.parse(localStorage.getItem("manualRequestStatus") || "{}").id}`)
+    getInitialNotificationState(initialUsername)
   );
+
+  const navigate = useNavigate();
+  
   useEffect(() => {
     AOS.init({ duration: 800, once: true });
 
     const onAuthChange = () => {
-      // ... existing setLogged/setIsAdmin/setUsername ...
-      // NEW: Update notification status on auth/storage change
-      const status = localStorage.getItem("manualRequestStatus");
-      const dismissed = status ? localStorage.getItem(`dismissed_${JSON.parse(status).id}`) : true;
-      setHasNewNotification(!!status && !dismissed);
+      // ⭐ FIX: Explicitly set all auth states to ensure synchronization
+      const isLogged = !!localStorage.getItem("token");
+      const adminStatus = localStorage.getItem("isAdmin") === "true";
+      const user = localStorage.getItem("username") || "";
+
+      setLogged(isLogged);
+      setIsAdmin(adminStatus);
+      setUsername(user);
+
+      // ⭐ FIX: Check notification status using the updated username
+      const statusKey = `manualRequestStatus_${user}`;
+      const status = localStorage.getItem(statusKey);
+      
+      let hasNotification = false;
+      if (status) {
+          const parsedStatus = JSON.parse(status);
+          const dismissed = localStorage.getItem(`dismissed_${parsedStatus.id}`);
+          hasNotification = !dismissed;
+      }
+      setHasNewNotification(hasNotification);
     };
 
     window.addEventListener("authChange", onAuthChange);
+    // 'storage' event listener is useful but doesn't fire for changes within the same tab,
+    // so the manual 'authChange' dispatch is key. Keeping both is safest.
     window.addEventListener("storage", onAuthChange);
 
     return () => {
@@ -43,9 +71,18 @@ export default function Navbar() {
     try {
       clearAuthToken();
       sessionStorage.clear();
+      // Clear all user-related localStorage keys on logout
+      localStorage.removeItem("username");
+      localStorage.removeItem("isAdmin");
+      localStorage.removeItem("subscription");
+      
+      // Clear all manual request statuses (for security, though typically they are cleared on dismiss)
+      // Note: This pattern is safer than trying to clear every user-specific key.
+      // We rely on the `onAuthChange` logic to reset the component state based on the cleared local storage.
     } catch (e) {}
 
-    window.dispatchEvent(new Event("authChange"));
+    // ⭐ FIX: Dispatch the event *after* clearing the storage
+    window.dispatchEvent(new Event("authChange")); 
     navigate("/login");
   }
 

@@ -64,7 +64,7 @@ export default function AdminManualRequests() {
        subscription: res.subscription || null 
    };
    
-   // ⭐ FIX: Store in a user-specific key for the target user (req.user)
+   // ⭐ FIX: Store in a user-specific key for the target user
    localStorage.setItem(`manualRequestStatus_${requestToProcess.user}`, JSON.stringify(statusData));
 
    alert(`Approved successfully! The user (${requestToProcess.user}) will see a notification.`);
@@ -94,7 +94,7 @@ export default function AdminManualRequests() {
        subscription: null // Not needed for rejection message
    };
 
-   // ⭐ FIX: Store in a user-specific key for the target user (req.user)
+   // ⭐ FIX: Store in a user-specific key for the target user
    localStorage.setItem(`manualRequestStatus_${requestToProcess.user}`, JSON.stringify(statusData));
 
    alert(`Rejected successfully! The user (${requestToProcess.user}) will see a notification.`);

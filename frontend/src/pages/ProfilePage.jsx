@@ -28,6 +28,7 @@ const [profile, setProfile] = useState(null);
   load();
   loadRequestStatus(); // Load and check for new status message
  }, []);
+
 async function load() {
  try {
  const p = await apiGet("/profile/");
@@ -79,20 +80,25 @@ async function load() {
    // ⭐ FIX: Clear the user-specific status from localStorage after dismissal
       const currentUsername = localStorage.getItem("username");
       if (currentUsername) {
-          localStorage.removeItem(`manualRequestStatus_${currentUsername}`);
+          // Removes the key that was only visible to this user
+          localStorage.removeItem(`manualRequestStatus_${currentUsername}`); 
       }
-   // This will now show the final static message based on requestStatus
+
+      // Force a re-load of the subscription to update the profile page
+      load(); 
   }
  }
 
-if (!profile) return <h1 className="mt-24 text-center">Loading...</h1>;
+if (!profile) return <h1 className="mt-28 text-center">Loading...</h1>;
 
 // UPDATED: Dynamic status styling and message generation (using current subscription data)
 const getStatusStyle = (status) => {
     // Prioritize the currently loaded subscription data because it reflects the real-time prediction count.
+    // If subscription is null but requestStatus has it, use requestStatus's subscription.
     const activeSub = subscription || requestStatus?.subscription; 
     
   if (status === "approved") {
+        // Use the subscription object if available to get accurate counts/plan names
         const remaining = activeSub?.remaining_predictions || 0;
         const planName = activeSub?.plan || "a plan";
         
