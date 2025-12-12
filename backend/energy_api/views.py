@@ -137,43 +137,69 @@ def get_recommendations(user_vals):
         "Window_To_Wall_Ratio": 30
     }
 
+    # MATERIAL OPTIONS ONLY FOR INSULATION
+    insulation_materials = {
+        "Floor_Insulation": "rigid PIR/XPS boards, mineral wool, or spray foam",
+        "Door_Insulation": "thermally insulated doors with good sealing",
+        "Roof_Insulation": "PIR boards, rockwool, cellulose, or spray foam",
+        "Window_Insulation": "double-glazed low-E glass with argon filling",
+        "Wall_Insulation": "mineral wool, EPS/XPS boards, or external insulated cladding"
+    }
+
     for feature, opt in optimal.items():
         try:
             val = float(user_vals.get(feature, 0))
         except Exception:
             val = 0.0
 
-        if feature in [
-            "Floor_Insulation", "Door_Insulation", "Roof_Insulation",
-            "Window_Insulation", "Wall_Insulation"
-        ]:
+        if feature in ["Floor_Insulation", "Door_Insulation", "Roof_Insulation",
+                       "Window_Insulation", "Wall_Insulation"]:
             if val > opt * 1.5:
-                issues.append(f"{feature.replace('_', ' ')} is too high.")
-                recommendations.append(f"Reduce {feature.replace('_',' ')} closer to {opt}.")
+                issues.append(f"{feature.replace('_', ' ')} is too high (poor insulation).")
+                recommendations.append(
+                    f"Improve the {feature.replace('_',' ').lower()} (target: {opt}). "
+                    f"Use: {insulation_materials[feature]}."
+                )
 
-        elif feature == "Hvac_Efficiency" and val < opt:
-            issues.append("Low HVAC efficiency.")
-            recommendations.append("Upgrade HVAC system to ≥ 3.5 COP.")
+        elif feature == "Hvac_Efficiency":
+            if val < opt:
+                issues.append("Low HVAC efficiency.")
+                recommendations.append(f"Upgrade HVAC to COP {opt} or higher.")
 
-        elif feature == "Domestic_Hot_Water_Usage" and val > opt * 1.3:
-            issues.append("High domestic hot water usage.")
-            recommendations.append("Install low-flow fixtures.")
+        elif feature == "Domestic_Hot_Water_Usage":
+            if val > opt * 1.3:
+                issues.append("High hot water usage.")
+                recommendations.append(
+                    f"Use low-flow taps/showers or a solar water heater (recommended: {opt})."
+                )
 
-        elif feature == "Lighting_Density" and val > opt * 1.4:
-            issues.append("High lighting density.")
-            recommendations.append("Use LED lighting.")
+        elif feature == "Lighting_Density":
+            if val > opt * 1.4:
+                issues.append("Lighting density is high.")
+                recommendations.append(
+                    f"Switch to LED lights or reduce lighting (target LPD: {opt})."
+                )
 
-        elif feature == "Equipment_Density" and val > opt * 1.4:
-            issues.append("High equipment density.")
-            recommendations.append("Use efficient appliances.")
+        elif feature == "Occupancy_Level":
+            if val > opt * 1.5:
+                issues.append("High occupancy load.")
+                recommendations.append(
+                    f"Avoid overcrowding and spread activities across the day (ideal: {opt})."
+                )
 
-        elif feature == "Occupancy_Level" and val > opt * 1.5:
-            issues.append("High occupancy load.")
-            recommendations.append("Reduce peak loads.")
+        elif feature == "Equipment_Density":
+            if val > opt * 1.4:
+                issues.append("High equipment density.")
+                recommendations.append(
+                    f"Use energy-efficient appliances (target load: {opt})."
+                )
 
-        elif feature == "Window_To_Wall_Ratio" and val > 50:
-            issues.append("High window-to-wall ratio.")
-            recommendations.append("Use shading devices.")
+        elif feature == "Window_To_Wall_Ratio":
+            if val > 50:
+                issues.append("High window-to-wall ratio.")
+                recommendations.append(
+                    f"Use shades or better glass to reduce heat gain (target WWR: {opt}%)."
+                )
 
     return issues, recommendations
 
