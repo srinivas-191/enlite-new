@@ -45,14 +45,29 @@ export default function AdminManualRequests() {
 
  async function approve(id) {
   if (!window.confirm("Approve this payment? This will grant the user the requested plan.")) return;
+  
+  // Find the request object to get the username
+  const requestToProcess = requests.find(req => req.id === id);
+  if (!requestToProcess) return alert("Request not found.");
+
 
   try {
-   await apiPost(`/admin/manual-requests/${id}/approve/`, {});
-   alert("Approved successfully! The user's account has been updated.");
+   // API call to approve the request. 
+   // We assume the server returns the updated subscription object in the response body (res)
+   const res = await apiPost(`/admin/manual-requests/${id}/approve/`, {});
    
-   // NEW: Save status to localStorage for user notification
-   localStorage.setItem("manualRequestStatus", JSON.stringify({ id, status: "approved" })); 
+   // Store the status message using the approved user's unique identifier (username)
+   const statusData = {
+       id: id,
+       status: "approved",
+       // Pass the new subscription data to the user for the dynamic prediction count
+       subscription: res.subscription || null 
+   };
    
+   // ⭐ FIX: Store in a user-specific key for the target user (req.user)
+   localStorage.setItem(`manualRequestStatus_${requestToProcess.user}`, JSON.stringify(statusData));
+
+   alert(`Approved successfully! The user (${requestToProcess.user}) will see a notification.`);
    loadRequests();
   } catch (err) {
    console.error(err);
@@ -63,18 +78,30 @@ export default function AdminManualRequests() {
  // --- EXISTING REJECT FUNCTION ---
  async function reject(id) {
   if (!window.confirm("Reject this payment? The user's plan will NOT be activated.")) return;
+  
+  // Find the request object to get the username
+  const requestToProcess = requests.find(req => req.id === id);
+  if (!requestToProcess) return alert("Request not found.");
 
   try {
+   // API call to reject the request
    await apiPost(`/admin/manual-requests/${id}/reject/`, {});
-   alert("Rejected successfully! The user's plan remains inactive.");
    
-   // NEW: Save status to localStorage for user notification
-   localStorage.setItem("manualRequestStatus", JSON.stringify({ id, status: "rejected" })); 
-   
+   // Store the status message using the rejected user's unique identifier (username)
+   const statusData = {
+       id: id,
+       status: "rejected",
+       subscription: null // Not needed for rejection message
+   };
+
+   // ⭐ FIX: Store in a user-specific key for the target user (req.user)
+   localStorage.setItem(`manualRequestStatus_${requestToProcess.user}`, JSON.stringify(statusData));
+
+   alert(`Rejected successfully! The user (${requestToProcess.user}) will see a notification.`);
    loadRequests();
   } catch (err) {
    console.error(err);
-   alert("Failed to reject request");
+   alert("Failed to reject request"); 
   }
  }
 
