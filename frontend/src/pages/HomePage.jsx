@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import DynamicHero from "../components/home/DynamicHero";
 
 import { energyTypes } from "../components/home/EnergyTypesSection";
-import EnergyTypesSection from "../components/home/EnergyTypesSection";
+//import EnergyTypesSection from "../components/home/EnergyTypesSection";
 import { industryGaps } from "../components/home/IndustryGapsSection";
 import IndustryGapsSection from "../components/home/IndustryGapsSection";
 import {lightCardStyle} from "../components/home/IndustryGapsSection";
@@ -73,7 +73,7 @@ const HomePage = () => {
         <div className="relative z-10 max-w-7xl mx-auto pb-0">
           
           {/* Energy Types Section */}
-          <Suspense fallback={
+          {/* <Suspense fallback={
             <section className="py-24 px-6 max-w-6xl mx-auto pb-0">
               <SectionSkeleton />
             </section>
@@ -83,7 +83,7 @@ const HomePage = () => {
               setActiveEnergy={setActiveEnergy}
               energyTypes={energyTypes}
             />
-          </Suspense>
+          </Suspense> */}
   
           {/* Industry Gaps Section */}
           <Suspense fallback={

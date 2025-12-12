@@ -47,9 +47,12 @@ export default function AdminManualRequests() {
   if (!window.confirm("Approve this payment? This will grant the user the requested plan.")) return;
 
   try {
-   // API call to approve the request
    await apiPost(`/admin/manual-requests/${id}/approve/`, {});
    alert("Approved successfully! The user's account has been updated.");
+   
+   // NEW: Save status to localStorage for user notification
+   localStorage.setItem("manualRequestStatus", JSON.stringify({ id, status: "approved" })); 
+   
    loadRequests();
   } catch (err) {
    console.error(err);
@@ -62,13 +65,16 @@ export default function AdminManualRequests() {
   if (!window.confirm("Reject this payment? The user's plan will NOT be activated.")) return;
 
   try {
-   // API call to reject the request
-   await apiPost(`/admin/manual-requests/${id}/reject/`, {}); // This is now a valid endpoint
+   await apiPost(`/admin/manual-requests/${id}/reject/`, {});
    alert("Rejected successfully! The user's plan remains inactive.");
+   
+   // NEW: Save status to localStorage for user notification
+   localStorage.setItem("manualRequestStatus", JSON.stringify({ id, status: "rejected" })); 
+   
    loadRequests();
   } catch (err) {
    console.error(err);
-   alert("Failed to reject request"); // This alert will no longer be hit for 404/500 errors
+   alert("Failed to reject request");
   }
  }
 

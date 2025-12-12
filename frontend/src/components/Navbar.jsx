@@ -15,14 +15,19 @@ export default function Navbar() {
     localStorage.getItem("username") || ""
   );
   const navigate = useNavigate();
-
+  const [hasNewNotification, setHasNewNotification] = useState(
+    !!localStorage.getItem("manualRequestStatus") && 
+    !localStorage.getItem(`dismissed_${JSON.parse(localStorage.getItem("manualRequestStatus") || "{}").id}`)
+  );
   useEffect(() => {
     AOS.init({ duration: 800, once: true });
 
     const onAuthChange = () => {
-      setLogged(!!localStorage.getItem("token"));
-      setIsAdmin(localStorage.getItem("isAdmin") === "true");
-      setUsername(localStorage.getItem("username") || "");
+      // ... existing setLogged/setIsAdmin/setUsername ...
+      // NEW: Update notification status on auth/storage change
+      const status = localStorage.getItem("manualRequestStatus");
+      const dismissed = status ? localStorage.getItem(`dismissed_${JSON.parse(status).id}`) : true;
+      setHasNewNotification(!!status && !dismissed);
     };
 
     window.addEventListener("authChange", onAuthChange);
@@ -136,6 +141,10 @@ export default function Navbar() {
             <div className="relative group">
               <button className="p-2 px-3 rounded inline-flex items-center gap-2">
                 {username || "Account"} ▾
+                {/* NEW: Notification Badge */}
+                {hasNewNotification && (
+                  <span className="absolute top-1 right-1 h-3 w-3 bg-red-500 rounded-full border-2 border-white"></span>
+                )}
               </button>
 
               <div className="absolute left-0 right-0 bg-white border rounded shadow-lg hidden group-hover:block z-40 min-w-[150px]">
@@ -144,6 +153,10 @@ export default function Navbar() {
                   className="block w-full text-left px-4 py-2 hover:bg-gray-100"
                 >
                   Profile
+                  {/* Badge inside dropdown too */}
+                  {hasNewNotification && (
+                      <span className="inline-block h-2 w-2 bg-red-500 rounded-full ml-2"></span>
+                  )}
                 </button>
 
                 <button
@@ -349,9 +362,13 @@ export default function Navbar() {
                           setOpen(false);
                           navigate("/profile");
                         }}
-                        className="w-full p-3 text-left"
+                        className="w-full p-3 text-left flex items-center justify-between" // Added flex for badge
                       >
                         Profile
+                        {/* Badge for mobile */}
+                        {hasNewNotification && (
+                            <span className="h-2 w-2 bg-red-500 rounded-full"></span>
+                        )}
                       </button>
                     </li>
 

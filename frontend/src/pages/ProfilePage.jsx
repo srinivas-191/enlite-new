@@ -1,16 +1,33 @@
 // src/pages/ProfilePage.jsx
 import React, { useEffect, useState } from "react";
 import { apiGet } from "../lib/api";
+import { motion } from "framer-motion"; // Import motion for animation
+import { CheckCircle, XCircle } from "lucide-react"; // Import icons
+
+// Define the continuous pulsating zoom animation
+const pulseZoom = {
+  scale: [1, 1.05, 1], // Keyframes for scale
+  opacity: [1, 0.9, 1], // Keyframes for opacity (subtle)
+  transition: {
+    duration: 1.5,
+    repeat: Infinity,
+    ease: "easeInOut",
+  },
+};
 
 export default function ProfilePage() {
  const [profile, setProfile] = useState(null);
- const [subscription, setSubscription] = useState(null);
- const [history, setHistory] = useState([]);
+  const [subscription, setSubscription] = useState(null);
+  const [history, setHistory] = useState([]);
+  
+  // New state for manual request status
+  const [requestStatus, setRequestStatus] = useState(null);
+  const [showAnimatedMessage, setShowAnimatedMessage] = useState(false);
 
- useEffect(() => {
-  load();
- }, []);
-
+  useEffect(() => {
+    load();
+    loadRequestStatus(); // Load and check for new status message
+  }, []);
  async function load() {
   try {
    const p = await apiGet("/profile/");
@@ -29,11 +46,99 @@ export default function ProfilePage() {
   }
  }
 
- if (!profile) return <h1 className="mt-28 text-center">Loading...</h1>;
+ // NEW: Function to check for and load manual request status from localStorage
+  function loadRequestStatus() {
+    // Check for the temporary status set after admin approval/rejection
+    const statusKey = "manualRequestStatus";
+    const status = localStorage.getItem(statusKey);
+
+    if (status) {
+      const parsedStatus = JSON.parse(status);
+      setRequestStatus(parsedStatus);
+      
+      // Only show the animated version if it's the *first* time seeing it
+      if (!localStorage.getItem(`dismissed_${parsedStatus.id}`)) {
+          setShowAnimatedMessage(true);
+      }
+    }
+  }
+
+  // NEW: Function to handle the "OK" button click
+  function dismissAnimatedMessage() {
+    if (requestStatus) {
+      // 1. Hide the animated box (will show the static message)
+      setShowAnimatedMessage(false);
+      
+      // 2. Permanently save that this specific notification ID was dismissed
+      localStorage.setItem(`dismissed_${requestStatus.id}`, "true");
+      
+      // 3. (Optional cleanup: remove the temporary status, but keep the history)
+      // localStorage.removeItem("manualRequestStatus");
+      
+      // This will now show the final static message based on requestStatus
+    }
+  }
+
+ if (!profile) return <h1 className="mt-24 text-center">Loading...</h1>;
+
+ const getStatusStyle = (status) => {
+    if (status === "approved") {
+      return { 
+        base: "bg-green-100 border-green-400 text-green-800",
+        icon: <CheckCircle className="text-green-500" size={24} />,
+        message: "Your manual payment request has been **APPROVED**! Your plan is now active.",
+      };
+    }
+    if (status === "rejected") {
+      return { 
+        base: "bg-red-100 border-red-400 text-red-800",
+        icon: <XCircle className="text-red-500" size={24} />,
+        message: "Your manual payment request has been **REJECTED**. Please contact support.",
+      };
+    }
+    return null; // Should not happen
+  };
+  
+  const statusInfo = requestStatus ? getStatusStyle(requestStatus.status) : null;
+
 
  return (
   <div className="max-w-6xl mx-auto mt-24 p-6"> {/* Increased width and top margin */}
    <h1 className="text-4xl font-extrabold mb-8 text-blue-700">User Profile Dashboard</h1>
+
+   {/* NEW: Manual Request Status Notification */}
+      {requestStatus && statusInfo && (
+        <div className="mb-8">
+          {showAnimatedMessage ? (
+            // Animated Decorated Box
+            <motion.div
+              animate={pulseZoom}
+              className={`p-6 border-4 rounded-xl shadow-xl transition duration-300 ${statusInfo.base} flex flex-col sm:flex-row items-center justify-between gap-4`}
+            >
+              <div className="flex items-center gap-3">
+                {statusInfo.icon}
+                <p className="text-xl font-bold">
+                  {statusInfo.message.replace(/\*\*/g, '')}
+                </p>
+              </div>
+              <motion.button
+                onClick={dismissAnimatedMessage}
+                className="bg-white text-gray-700 font-semibold px-6 py-2 rounded-lg shadow-md hover:bg-gray-100 transition duration-300"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                OK
+              </motion.button>
+            </motion.div>
+          ) : (
+            // Static Final Message
+            <div className={`p-4 border-l-8 rounded-r-lg shadow-md ${statusInfo.base} flex items-center gap-3`}>
+              {statusInfo.icon}
+              <p className="font-medium" dangerouslySetInnerHTML={{ __html: statusInfo.message }}></p>
+            </div>
+          )}
+        </div>
+      )}
 
    <div className="grid md:grid-cols-3 gap-8">
     {/* 1. PROFILE INFO CARD */}
