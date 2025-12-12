@@ -609,6 +609,11 @@ export default function PredictPage() {
       // If backend returned remaining field, use it (preferred)
       if (resp && typeof resp.remaining === "number") {
         setRemainingTrials(resp.remaining);
+        const subscription = JSON.parse(localStorage.getItem("subscription"));
+        if (subscription) {
+        subscription.remaining_predictions = resp.remaining;
+        localStorage.setItem("subscription", JSON.stringify(subscription));
+      }
         if (resp.remaining <= 0) setShowUpgradeModal(true);
       } else {
         // otherwise, decrement locally and refresh from subscription/profile
@@ -618,6 +623,13 @@ export default function PredictPage() {
             if (next <= 0) setShowUpgradeModal(true);
             return next;
           });
+
+           setTimeout(async () => {
+          const sres = await apiGet("/subscription/");
+          if (sres?.subscription) {
+            localStorage.setItem("subscription", JSON.stringify(sres.subscription));
+          }
+        }, 1000);
 
           // refresh server-truth after small delay
           setTimeout(() => {
