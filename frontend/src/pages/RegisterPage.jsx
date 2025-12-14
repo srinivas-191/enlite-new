@@ -1,7 +1,12 @@
 // src/pages/RegisterPage.jsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiPost, setAuthToken } from "../lib/api";
+// Assuming apiPost is a wrapper for fetch or axios
+import { apiPost, setAuthToken } from "../lib/api"; 
+import axios from 'axios'; // We'll use axios directly for the localhost test
+
+// Base URL for your local backend
+const LOCAL_API_BASE_URL = "http://localhost:8000/api"; // Adjust port if needed
 
 export default function RegisterPage() {
   const [username, setUsername] = useState("");
@@ -15,24 +20,28 @@ export default function RegisterPage() {
     setBusy(true);
 
     try {
-      const res = await apiPost("/register/", {
+      // --- START MODIFICATION for localhost testing ---
+      // Replace apiPost("/register/", ...) with a direct axios call to localhost
+      const res = await axios.post(`${LOCAL_API_BASE_URL}/register/`, {
         username,
         email,
         password,
       });
 
-      if (!res.token) {
-        alert(res.error || "Registration failed");
+      // The response structure from axios is res.data
+      const responseData = res.data;
+
+      if (!responseData.token) {
+        alert(responseData.error || "Registration failed");
         setBusy(false);
         return;
       }
       
-      // --- START MODIFICATION ---
+      // Since registration is complete, we navigate to login *without* logging in
       // REMOVED: setAuthToken(res.token);
       // REMOVED: localStorage.setItem("username", res.username);
       // REMOVED: localStorage.setItem("isAdmin", res.is_admin ? "true" : "false");
       // REMOVED: window.dispatchEvent(new Event("authChange"));
-      // --- END MODIFICATION ---
 
       // Handle previous redirect request (if Try button triggered register)
       const redirect = localStorage.getItem("postLoginRedirect");
@@ -48,6 +57,7 @@ export default function RegisterPage() {
 
     } catch (err) {
       console.error(err);
+      // Access the error message from the axios response structure
       alert(err?.response?.data?.error || "Registration failed");
     }
 

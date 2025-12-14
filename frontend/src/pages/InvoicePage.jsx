@@ -1,29 +1,38 @@
-// src/pages/InvoicePage.jsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-  QrCode,
-  Clipboard,
   ArrowLeft,
-  Send,
-  CheckSquare,
   DollarSign,
-  UserCheck,
-  CheckCircle,
   Clock,
+  CreditCard, // Icon for Razorpay
+  ShoppingCart, // Icon for Checkout
 } from "lucide-react";
 
-import { apiPostForm } from "../lib/api"; // ✅ FIXED — must use multipart uploader
+// ⚠️ IMPORTANT: Switched from apiPostForm to apiPost (JSON-based)
+import { apiPost } from "../lib/api"; 
+import useAuth from "../hooks/useAuth"; // FIX: Ensure this file exists in src/hooks/
 
+// ----------------------------------------------------
+// NOTE: Plans must match the plan names and prices (in INR) defined in the backend (views.py)
 const PLAN_MAP = {
-  Basic: { price: 75, label: "Basic", qr: "/assets/qr1.jpg" },
-  Super: { price: 175, label: "Super", qr: "/assets/qr2.jpg" },
-  Premium: { price: 300, label: "Premium", qr: "/assets/qr3.jpg" },
+  Basic: { price: 75, label: "Basic", apiPlan: "basic" },
+  Super: { price: 175, label: "Super", apiPlan: "super" },
+  Premium: { price: 300, label: "Premium", apiPlan: "premium" },
 };
 
-const UPI_ID = "9390248043@ptyes";
-const UPI_NAME = "Chidhurala Chandrakiran";
+// ----------------------------------------------------
+
+// Inject Razorpay script dynamically
+const loadRazorpayScript = (src) => {
+  return new Promise((resolve) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
 
 const containerVariants = {
   hidden: { opacity: 0, y: 30 },
@@ -33,191 +42,199 @@ const containerVariants = {
 export default function InvoicePage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  // Assuming useAuth provides the user object { username, email, phone }
+  const { user } = useAuth(); 
 
-  const planName = searchParams.get("plan") || "Basic";
-  const plan = PLAN_MAP[planName] || PLAN_MAP.Basic;
+  const planName = searchParams.get("plan");
+  const planDetails = useMemo(() => PLAN_MAP[planName] || null, [planName]);
 
-  const [bankName, setBankName] = useState("");
-  const [txnId, setTxnId] = useState("");
-  const [notes, setNotes] = useState("");
-  const [screenshot, setScreenshot] = useState(null);
-  const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
 
-  const qrSrc = plan.qr;
-
-  const upiLink = useMemo(() => {
-    return `upi://pay?pa=${encodeURIComponent(
-      UPI_ID
-    )}&pn=${encodeURIComponent(UPI_NAME)}&am=${plan.price}&cu=INR&tn=${encodeURIComponent(
-      `${plan.label} plan payment`
-    )}`;
-  }, [plan]);
-
-  // ⭐ Correct: Use apiPostForm (multipart/form-data)
-  const handleSubmit = async () => {
-    if (!bankName || !txnId) {
-      setMessage("Please fill the Banking Name and Transaction ID fields.");
-      return;
+  // Only run if the plan is invalid
+  useEffect(() => {
+    if (!planDetails) {
+      setMessage("❌ Error: Invalid plan selected.");
     }
-    if (!screenshot) {
-      setMessage("Screenshot is required for verification.");
-      return;
-    }
+  }, [planDetails]);
 
-    setSubmitting(true);
+  // Handle Razorpay Logic
+  const handleRazorpayPayment = async () => {
+    if (!planDetails) return;
+
     setMessage("");
+    setSubmitting(true);
+    
+    // 1. Load Razorpay SDK
+    const res = await loadRazorpayScript("https://checkout.razorpay.com/v1/checkout.js");
+
+    if (!res) {
+      setMessage("❌ Razorpay SDK failed to load. Are you connected to the internet?");
+      setSubmitting(false);
+      return;
+    }
 
     try {
-      const form = new FormData();
-      form.append("plan", plan.label);
-      form.append("amount", plan.price);
-      form.append("bank_name", bankName);
-      form.append("txn_id", txnId);
-      if (notes) form.append("notes", notes);
-      form.append("screenshot", screenshot);
+      // 2. Create Order via Backend API
+      const orderResponse = await apiPost("/razorpay/create-order/", {
+        plan: planDetails.apiPlan,
+      });
 
-      // 🚀 SEND TO RAILWAY USING CORRECT METHOD
-      await apiPostForm("/manual-payment-request/", form);
+      if (orderResponse.error) {
+        setMessage(`❌ Failed to create order: ${orderResponse.error}`);
+        setSubmitting(false);
+        return;
+      }
 
-      setMessage("✅ Success! Your payment request has been submitted.");
+      const { amount, order_id, key } = orderResponse;
+      
+      // 3. Configure and Open Razorpay Checkout Window
+      const options = {
+        key: key, 
+        amount: amount, // Amount is in paise (e.g., 7500 for ₹75)
+        currency: "INR",
+        name: "Energy Prediction Service",
+        description: `${planName} Plan Subscription`,
+        order_id: order_id, 
+        
+        // 4. Payment Handler (Called on successful payment)
+        handler: async function (response) {
+          // Verify Payment via Backend API
+          setSubmitting(true); 
+          const verificationResponse = await apiPost("/razorpay/verify-payment/", {
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_signature: response.razorpay_signature,
+          });
 
-      // Reset fields
-      setBankName("");
-      setTxnId("");
-      setNotes("");
-      setScreenshot(null);
+          if (verificationResponse.error) {
+            setMessage(`❌ Payment verification failed: ${verificationResponse.error}`);
+          } else {
+            setMessage("✅ Payment successful! Your subscription is active.");
+            // Redirect to profile/dashboard after successful subscription
+            setTimeout(() => navigate("/profile"), 3000); 
+          }
+          setSubmitting(false);
+        },
+        
+        // Prefill user details
+        prefill: {
+          name: user?.username || "New User", 
+          email: user?.email || "",
+          contact: user?.phone || "", 
+        },
+        theme: {
+          color: "#3b82f6", // Blue color for theme
+        },
+      };
+
+      const paymentObject = new window.Razorpay(options);
+      paymentObject.open();
+
     } catch (err) {
-      console.error(err);
-      setMessage(
-        `❌ Submission failed: ${
-          err?.response?.data?.error || err?.message || "Unknown error"
-        }`
-      );
+      console.error("Razorpay Payment Flow Error:", err);
+      setMessage(`❌ An unexpected error occurred: ${err.message}`);
+      setSubmitting(false); // Ensure button is re-enabled on failure
     } finally {
-      setSubmitting(false);
-      setTimeout(() => setMessage(""), 5000);
+      // We rely on the handler to set submitting=false, but this is a final fallback.
+      // Removed generic setSubmitting(false) here to avoid conflicts with handler.
     }
   };
 
-  const handleCopyToClipboard = () => {
-    navigator.clipboard.writeText(upiLink);
-    setMessage("🔗 UPI link copied!");
-    setTimeout(() => setMessage(""), 3000);
-  };
+  if (!planDetails) {
+    // Renders the error message set in useEffect
+    return (
+      <motion.div className="container mx-auto p-4 max-w-2xl mt-10">
+        <h1 className="text-3xl font-bold text-red-600 mb-4">Payment Error</h1>
+        <p className="text-lg">{message}</p>
+        <button
+          onClick={() => navigate("/pricing")}
+          className="mt-6 flex items-center gap-2 text-blue-600 hover:underline"
+        >
+          <ArrowLeft size={16} /> Back to Pricing
+        </button>
+      </motion.div>
+    );
+  }
 
+  // Updated JSX for the Razorpay Payment View
   return (
     <motion.div
-      className="max-w-6xl mx-auto mt-24 p-8 bg-gray-50 rounded-2xl shadow-3xl min-h-[80vh]"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
+      className="container mx-auto p-4 max-w-2xl mt-10"
     >
-      <h1 className="text-4xl font-extrabold mb-8 text-gray-800 border-b pb-3 flex items-center gap-3">
-        <DollarSign size={32} className="text-blue-600" />
-        Manual Payment: <span className="text-blue-700">{plan.label} Plan</span>
-      </h1>
+      <button
+        onClick={() => navigate("/pricing")}
+        className="mb-6 flex items-center gap-2 text-gray-600 hover:text-gray-900 transition"
+      >
+        <ArrowLeft size={16} /> Change Plan
+      </button>
 
-      <div className="grid md:grid-cols-2 gap-8">
-        {/* LEFT SIDE */}
-        <motion.div className="border p-6 bg-white rounded-xl shadow-xl">
-          <h3 className="text-2xl font-bold mb-4 text-blue-700 flex items-center gap-2">
-            <QrCode size={24} /> Pay via UPI
-          </h3>
-
-          <img
-            src={qrSrc}
-            className="w-full max-w-[280px] rounded-lg border-4 border-gray-100 shadow-lg mb-6"
-            alt=""
-          />
-
-          <motion.button
-            onClick={handleCopyToClipboard}
-            className="px-5 py-3 border rounded-lg bg-blue-50 text-blue-700"
-            whileHover={{ scale: 1.05 }}
-          >
-            <Clipboard size={18} /> Copy UPI Link
-          </motion.button>
-        </motion.div>
-
-        {/* RIGHT SIDE */}
-        <motion.div className="border p-6 bg-white rounded-xl shadow-xl">
-          <h3 className="text-2xl font-bold mb-6 text-green-700 flex items-center gap-2 border-b pb-2">
-            <UserCheck size={24} /> Verification Form
-          </h3>
-
-          {/* Fields */}
-          <div className="space-y-4">
-            <div>
-              <label className="block font-semibold">Banking Name *</label>
-              <input
-                className="w-full border px-4 py-2 rounded-lg"
-                value={bankName}
-                onChange={(e) => setBankName(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="block font-semibold">Transaction ID *</label>
-              <input
-                className="w-full border px-4 py-2 rounded-lg"
-                value={txnId}
-                onChange={(e) => setTxnId(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="block font-semibold">Screenshot *</label>
-              <input
-                type="file"
-                accept="image/*"
-                className="w-full text-sm"
-                onChange={(e) => setScreenshot(e.target.files[0])}
-              />
-              {screenshot && (
-                <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
-                  <CheckCircle size={14} /> {screenshot.name}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label className="block font-semibold">Notes</label>
-              <textarea
-                rows="4"
-                className="w-full border px-4 py-2 rounded-lg"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              ></textarea>
-            </div>
+      <div className="p-8 bg-white rounded-xl shadow-2xl">
+        <div className="flex items-center justify-between mb-8 pb-4 border-b">
+          <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
+            <ShoppingCart size={28} /> Secure Checkout
+          </h1>
+          <div className={`text-xl font-extrabold px-3 py-1 rounded-full text-white bg-blue-600`}>
+            {planName}
           </div>
+        </div>
 
-          {/* Submit */}
-          <div className="mt-8">
+        {/* Plan Summary */}
+        <div className="space-y-4">
+          <div className="flex justify-between items-center text-lg py-2 border-b border-gray-100">
+            <span className="text-gray-600">Plan Selected</span>
+            <span className="font-semibold text-gray-900">{planName}</span>
+          </div>
+          <div className="flex justify-between items-center text-lg py-2 border-b border-gray-100">
+            <span className="text-gray-600">Price (INR)</span>
+            <span className="font-semibold text-gray-900">₹{planDetails.price}</span>
+          </div>
+          <div className="flex justify-between items-center text-xl font-bold py-4">
+            <span>Total Payable</span>
+            <span className="text-green-600 flex items-center gap-1">
+              <DollarSign size={20} />
+              {planDetails.price}
+            </span>
+          </div>
+        </div>
+        
+        {/* Payment Button */}
+        <div className="mt-8">
+            <h2 className="text-2xl font-semibold mb-4 text-gray-800">Payment Method</h2>
+            
             <motion.button
-              onClick={handleSubmit}
-              disabled={submitting}
-              className={`w-full py-3 text-white font-bold rounded-lg flex justify-center gap-2 ${
-                submitting ? "bg-gray-400" : "bg-green-600 hover:bg-green-700"
+              onClick={handleRazorpayPayment}
+              disabled={submitting || !planDetails}
+              className={`w-full py-4 text-white font-bold rounded-lg flex justify-center items-center gap-3 transition-colors ${
+                submitting 
+                ? "bg-gray-400 cursor-not-allowed" 
+                : "bg-blue-600 hover:bg-blue-700"
               }`}
             >
-              {submitting ? <Clock className="animate-spin" /> : <Send />}
-              {submitting ? "Submitting..." : "Submit for Verification"}
+              {submitting ? <Clock className="animate-spin" /> : <CreditCard />}
+              {submitting ? "Processing..." : `Pay ₹${planDetails.price} with Razorpay`}
             </motion.button>
 
-            {message && (
-              <p
-                className={`mt-4 p-3 rounded-lg text-sm font-semibold ${
-                  message.startsWith("✅")
-                    ? "bg-green-100 text-green-700"
-                    : "bg-red-100 text-red-700"
-                }`}
-              >
-                {message}
-              </p>
-            )}
-          </div>
-        </motion.div>
+          {message && (
+            <p
+              className={`mt-4 p-3 rounded-lg text-sm font-semibold ${
+                message.startsWith("✅")
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-700"
+              }`}
+            >
+              {message}
+            </p>
+          )}
+        </div>
+        
+        <div className="mt-6 p-4 text-sm text-gray-500 border-t pt-4">
+            <p>Your payment is securely processed by Razorpay. You will be redirected to the Razorpay payment gateway upon clicking 'Pay'.</p>
+        </div>
+
       </div>
     </motion.div>
   );
